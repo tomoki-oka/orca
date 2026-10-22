@@ -163,6 +163,7 @@ export class BrowserClientPageRetainedRegistry {
     const webview = createBrowserClientPageWebview({
       createWebview: this.options.createWebview,
       document: this.options.document,
+      host,
       identity
     })
 
@@ -211,7 +212,6 @@ export class BrowserClientPageRetainedRegistry {
       identity.partition,
       (this.partitionCounts.get(identity.partition) ?? 0) + 1
     )
-    host.appendChild(webview)
     this.ensureRoot().appendChild(host)
     return page
   }

@@ -1,4 +1,5 @@
 import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { attachBrowserClientPagePinchZoom } from './browser-client-page-pinch-zoom'
 import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 
 export function createBrowserClientPageRetainedRoot(document: Document): HTMLDivElement {
@@ -59,6 +60,7 @@ export function registerBrowserClientPageGuestMessageHandler(
 export function createBrowserClientPageWebview(options: {
   createWebview?: () => Electron.WebviewTag
   document: Document
+  host: HTMLElement
   identity: { browserPageId: string; partition: string }
 }): Electron.WebviewTag {
   const webview =
@@ -70,6 +72,8 @@ export function createBrowserClientPageWebview(options: {
   webview.addEventListener('ipc-message', (event) =>
     guestMessageHandler?.(options.identity.browserPageId, webview, event)
   )
+  options.host.appendChild(webview)
+  attachBrowserClientPagePinchZoom(webview, options.host)
   return webview
 }
 
