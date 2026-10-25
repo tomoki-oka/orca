@@ -7,6 +7,7 @@ import {
   webviewRegistry
 } from './webview-registry'
 import { handleGuestWindowCloseMessage } from './browser-page-window-close'
+import { attachBrowserPagePinchZoom } from '../browser-page-pinch-zoom'
 
 export function setBrowserPageWebviewInputLock(
   webview: Electron.WebviewTag,
@@ -80,6 +81,7 @@ export function ensureBrowserPageWebview({
   })
   registerPersistentWebview(browserTabId, webview)
   activeContainer.appendChild(webview)
+  attachBrowserPagePinchZoom(webview, activeContainer)
   created = true
 
   return { container: activeContainer, created, webview }

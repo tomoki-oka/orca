@@ -22,6 +22,9 @@ export type PinchZoomState = { scale: number; offsetX: number; offsetY: number }
 export type PinchZoomViewport = { width: number; height: number }
 export type PinchZoomWheel = {
   ctrlKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+  metaKey: boolean
   deltaX: number
   deltaY: number
   clientX: number
@@ -55,6 +58,10 @@ export function reducePinchZoomWheel(
   viewport: PinchZoomViewport
 ): PinchZoomWheelResult {
   if (wheel.ctrlKey) {
+    // Why: Ctrl combined with Shift/Alt/Meta is a different gesture, so it is left to the page.
+    if (wheel.shiftKey || wheel.altKey || wheel.metaKey) {
+      return { preventDefault: false, state }
+    }
     // clientX/Y are pre-transform page coordinates, so the point under the fingers is
     // (client * scale + offset) on screen; keep that screen point fixed across the scale change.
     const screenX = wheel.clientX * state.scale + state.offsetX
@@ -102,7 +109,7 @@ export function reducePinchZoomWheel(
 }
 
 export type PinchZoomIpc = {
-  on: (channel: string, listener: () => void) => void
+  on: (channel: string, listener: (event: unknown, enabled?: unknown) => void) => void
   sendToHost: (channel: string, payload: unknown) => void
 }
 
@@ -130,10 +137,10 @@ export function installBrowserPinchZoom(ipc: PinchZoomIpc, target: Window = wind
     })
   }
 
-  // Why: the embedder re-sends this on each main-frame commit, which also resets a same-document
-  // navigation whose transform the embedder has already dropped.
-  ipc.on(PRELOAD_BROWSER_PINCH_ZOOM_ENABLE_CHANNEL, () => {
-    enabled = true
+  // Why: the embedder re-sends this on each main-frame commit and whenever it turns the feature
+  // off (viewport emulation), so every message also drops the magnification the embedder cleared.
+  ipc.on(PRELOAD_BROWSER_PINCH_ZOOM_ENABLE_CHANNEL, (_event, value) => {
+    enabled = value === true
     state = INITIAL_PINCH_ZOOM_STATE
   })
 
@@ -145,8 +152,8 @@ export function installBrowserPinchZoom(ipc: PinchZoomIpc, target: Window = wind
       if (!enabled) {
         return
       }
-      // Why: Ctrl/Cmd + mouse wheel is consumed by the main process's before-mouse-event as Orca's
-      // page zoom before the page sees it, so a ctrlKey wheel that arrives here is a trackpad pinch.
+      // Why: the main process's before-mouse-event consumes Ctrl/Cmd + mouse wheel (without Alt/Shift)
+      // as Orca's page zoom before the page sees it, so a Ctrl-only wheel that arrives here is a trackpad pinch.
       const result = reducePinchZoomWheel(state, event, viewport())
       if (result.preventDefault) {
         event.preventDefault()

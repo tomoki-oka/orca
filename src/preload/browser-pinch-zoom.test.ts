@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_PINCH_ZOOM_ENABLE_CHANNEL,
   BROWSER_PINCH_ZOOM_STATE_CHANNEL
@@ -18,7 +18,17 @@ import {
 const VIEWPORT = { width: 1000, height: 800 }
 
 function wheel(overrides: Partial<PinchZoomWheel>): PinchZoomWheel {
-  return { ctrlKey: false, deltaX: 0, deltaY: 0, clientX: 0, clientY: 0, ...overrides }
+  return {
+    ctrlKey: false,
+    shiftKey: false,
+    altKey: false,
+    metaKey: false,
+    deltaX: 0,
+    deltaY: 0,
+    clientX: 0,
+    clientY: 0,
+    ...overrides
+  }
 }
 
 function screenPointOf(state: PinchZoomState, x: number, y: number): [number, number] {
@@ -55,6 +65,19 @@ describe('reducePinchZoomWheel', () => {
     expect(after[0]).toBeCloseTo(before[0])
     expect(after[1]).toBeCloseTo(before[1])
   })
+
+  it.each(['shiftKey', 'altKey', 'metaKey'] as const)(
+    'leaves a Ctrl wheel combined with %s to the page',
+    (modifier) => {
+      const result = reducePinchZoomWheel(
+        INITIAL_PINCH_ZOOM_STATE,
+        wheel({ ctrlKey: true, [modifier]: true, deltaY: -40, clientX: 300, clientY: 200 }),
+        VIEWPORT
+      )
+      expect(result.preventDefault).toBe(false)
+      expect(result.state).toBe(INITIAL_PINCH_ZOOM_STATE)
+    }
+  )
 
   it('clamps the scale to 1..3', () => {
     const zoomedIn = reducePinchZoomWheel(
@@ -151,25 +174,43 @@ describe('clampPinchZoomState', () => {
 })
 
 describe('installBrowserPinchZoom', () => {
+  // Why: every install registers on the shared global window, so each is switched off after its test.
+  const installedEnables: ((value: boolean) => void)[] = []
+  afterEach(() => {
+    for (const enable of installedEnables.splice(0)) {
+      enable(false)
+    }
+  })
+
   function install(): {
-    enable: () => void
+    enable: (value?: boolean) => void
     sendToHost: ReturnType<typeof vi.fn>
   } {
-    const listeners = new Map<string, () => void>()
+    const listeners = new Map<string, (event: unknown, enabled?: unknown) => void>()
     const sendToHost = vi.fn()
     installBrowserPinchZoom({
       on: (channel, listener) => listeners.set(channel, listener),
       sendToHost
     })
-    return {
-      enable: () => listeners.get(PRELOAD_BROWSER_PINCH_ZOOM_ENABLE_CHANNEL)?.(),
-      sendToHost
-    }
+    const enable = (value = true): void =>
+      listeners.get(PRELOAD_BROWSER_PINCH_ZOOM_ENABLE_CHANNEL)?.({}, value)
+    installedEnables.push(enable)
+    return { enable, sendToHost }
   }
   // Why: happy-dom's WheelEvent drops ctrlKey and the client coordinates from its init dictionary.
   function dispatchWheel(init: Partial<PinchZoomWheel>): Event {
     const event = new Event('wheel', { cancelable: true, bubbles: true })
-    Object.assign(event, { ctrlKey: false, deltaX: 0, deltaY: 0, clientX: 0, clientY: 0, ...init })
+    Object.assign(event, {
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      deltaX: 0,
+      deltaY: 0,
+      clientX: 0,
+      clientY: 0,
+      ...init
+    })
     document.body.dispatchEvent(event)
     return event
   }
@@ -199,5 +240,32 @@ describe('installBrowserPinchZoom', () => {
     document.body.addEventListener('wheel', (e) => e.stopPropagation())
     dispatchWheel({ ctrlKey: true, deltaY: -50 })
     expect(sendToHost).toHaveBeenCalled()
+  })
+
+  it('takes nothing when the embedder disables it', () => {
+    const { enable, sendToHost } = install()
+    enable(false)
+    const event = dispatchWheel({ ctrlKey: true, deltaY: -50, clientX: 10, clientY: 10 })
+    expect(event.defaultPrevented).toBe(false)
+    expect(sendToHost).not.toHaveBeenCalled()
+  })
+
+  it('drops the magnification and stops taking wheels when disabled afterwards', () => {
+    const { enable, sendToHost } = install()
+    enable()
+    dispatchWheel({ ctrlKey: true, deltaY: -100, clientX: 10, clientY: 10 })
+    enable(false)
+    sendToHost.mockClear()
+    const event = dispatchWheel({ deltaY: 30 })
+    expect(event.defaultPrevented).toBe(false)
+    expect(sendToHost).not.toHaveBeenCalled()
+  })
+
+  it('does not treat Ctrl+Shift+wheel as a pinch', () => {
+    const { enable, sendToHost } = install()
+    enable()
+    const event = dispatchWheel({ ctrlKey: true, shiftKey: true, deltaY: -50 })
+    expect(event.defaultPrevented).toBe(false)
+    expect(sendToHost).not.toHaveBeenCalled()
   })
 })

@@ -7,6 +7,7 @@ import type {
   BrowserLoadError,
   BrowserViewportPresetId
 } from '../../../../../shared/browser-workspace-types'
+import { setBrowserPagePinchZoomEnabled } from '../browser-page-pinch-zoom'
 import { ensureBrowserPageWebview } from './browser-page-webview'
 import { applyBrowserPageViewportLayout, ensureBrowserPageViewport } from './browser-page-viewport'
 import { seedLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
@@ -116,6 +117,8 @@ export function attachBrowserPageWebview(
   }
 
   webviewRef.current = webview
+  // Why: viewport emulation sizes the guest itself and scrolls it from the host, which a pinch transform would fight.
+  setBrowserPagePinchZoomEnabled(webview, args.viewportPresetIdRef.current === null)
 
   // Why: un-park the shell before webview.src is assigned or the guest navigates while hidden and stays blank (the visibility layout effect doesn't re-run on first appear).
   applyBrowserPageViewportLayout(browserTabId, { paintable: isPaintable, active: isActive })

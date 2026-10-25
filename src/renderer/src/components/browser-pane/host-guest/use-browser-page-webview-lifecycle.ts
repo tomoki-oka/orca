@@ -24,6 +24,7 @@ import {
 } from '../describe-page/browser-annotation-geometry'
 import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
 import { attachBrowserPageWebview } from './attach-browser-page-webview'
+import { setBrowserPagePinchZoomEnabled } from '../browser-page-pinch-zoom'
 import { setBrowserPageWebviewInputLock } from './browser-page-webview'
 import type {
   BrowserPageRecoveryNavigationValidation,
@@ -283,6 +284,13 @@ export function useBrowserPageWebviewLifecycle({
     syncNavigationState,
     syncBrowserAnnotationViewportBridge
   ])
+
+  useEffect(() => {
+    const webview = webviewRef.current
+    if (webview) {
+      setBrowserPagePinchZoomEnabled(webview, viewportPresetId === null)
+    }
+  }, [viewportPresetId, webviewRef])
 
   useEffect(() => {
     const becamePaintable = isPaintable && !wasPaintableForGuestValidationRef.current

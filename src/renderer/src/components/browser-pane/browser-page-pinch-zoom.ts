@@ -26,18 +26,21 @@ function createOverlayScrollbar(host: HTMLElement, vertical: boolean): HTMLDivEl
   return bar
 }
 
+type PinchZoomController = { setEnabled: (enabled: boolean) => void }
+
+const controllers = new WeakMap<Electron.WebviewTag, PinchZoomController>()
+
 /**
- * Mirrors the guest's pinch-zoom state onto its `<webview>`. The host is `overflow: hidden`, so
- * the transformed guest is clipped to the pane and Orca's own UI is never magnified. The listeners live
- * on the webview, so they go away with it and need no teardown.
+ * Mirrors the guest's pinch-zoom state onto its `<webview>`. `clip` must be the pane-sized box
+ * around the guest and is made `overflow: hidden`, so the transformed guest never reaches Orca's
+ * own UI. The listeners live on the webview, so they go away with it and need no teardown.
  */
-export function attachBrowserClientPagePinchZoom(
-  webview: Electron.WebviewTag,
-  host: HTMLElement
-): void {
+export function attachBrowserPagePinchZoom(webview: Electron.WebviewTag, clip: HTMLElement): void {
+  let enabled = true
   let hideTimer: ReturnType<typeof setTimeout> | undefined
   let verticalBar: HTMLDivElement | null = null
   let horizontalBar: HTMLDivElement | null = null
+  clip.style.overflow = 'hidden'
 
   const hideBars = (): void => {
     for (const bar of [verticalBar, horizontalBar]) {
@@ -48,7 +51,7 @@ export function attachBrowserClientPagePinchZoom(
   }
   const sendEnable = (): void => {
     try {
-      webview.send(BROWSER_PINCH_ZOOM_ENABLE_CHANNEL)
+      webview.send(BROWSER_PINCH_ZOOM_ENABLE_CHANNEL, enabled)
     } catch {
       // Why: the guest may be gone or not yet attached; the next dom-ready sends it again.
     }
@@ -66,8 +69,8 @@ export function attachBrowserClientPagePinchZoom(
     }
     webview.style.transformOrigin = '0 0'
     webview.style.transform = `translate(${payload.offsetX}px, ${payload.offsetY}px) scale(${payload.scale})`
-    verticalBar ??= createOverlayScrollbar(host, true)
-    horizontalBar ??= createOverlayScrollbar(host, false)
+    verticalBar ??= createOverlayScrollbar(clip, true)
+    horizontalBar ??= createOverlayScrollbar(clip, false)
     const vertical = computeOverlayScrollbar(
       payload.scrollHeight,
       payload.scale,
@@ -98,7 +101,7 @@ export function attachBrowserClientPagePinchZoom(
 
   const onIpcMessage = (event: Event): void => {
     const message = event as Electron.IpcMessageEvent
-    if (message.channel !== BROWSER_PINCH_ZOOM_STATE_CHANNEL) {
+    if (!enabled || message.channel !== BROWSER_PINCH_ZOOM_STATE_CHANNEL) {
       return
     }
     const payload = parseBrowserPinchZoomPayload(message.args[0])
@@ -117,4 +120,22 @@ export function attachBrowserClientPagePinchZoom(
   webview.addEventListener('dom-ready', sendEnable)
   webview.addEventListener('ipc-message', onIpcMessage)
   webview.addEventListener('load-commit', onLoadCommit)
+  controllers.set(webview, {
+    setEnabled: (next) => {
+      if (next === enabled) {
+        return
+      }
+      enabled = next
+      clear()
+      sendEnable()
+    }
+  })
+}
+
+/** Turns pinch zoom on or off for an attached webview, dropping any magnification. */
+export function setBrowserPagePinchZoomEnabled(
+  webview: Electron.WebviewTag,
+  enabled: boolean
+): void {
+  controllers.get(webview)?.setEnabled(enabled)
 }

@@ -1,5 +1,5 @@
 import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
-import { attachBrowserClientPagePinchZoom } from './browser-client-page-pinch-zoom'
+import { attachBrowserPagePinchZoom } from './browser-page-pinch-zoom'
 import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 
 export function createBrowserClientPageRetainedRoot(document: Document): HTMLDivElement {
@@ -73,7 +73,7 @@ export function createBrowserClientPageWebview(options: {
     guestMessageHandler?.(options.identity.browserPageId, webview, event)
   )
   options.host.appendChild(webview)
-  attachBrowserClientPagePinchZoom(webview, options.host)
+  attachBrowserPagePinchZoom(webview, options.host)
   return webview
 }
 
