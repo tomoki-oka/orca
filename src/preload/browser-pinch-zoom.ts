@@ -152,8 +152,8 @@ export function installBrowserPinchZoom(ipc: PinchZoomIpc, target: Window = wind
       if (!enabled) {
         return
       }
-      // Why: the main process's before-mouse-event consumes Ctrl/Cmd + mouse wheel (without Alt/Shift)
-      // as Orca's page zoom before the page sees it, so a Ctrl-only wheel that arrives here is a trackpad pinch.
+      // Why: Ctrl/Cmd + mouse-wheel page zoom belongs to the main process's before-mouse-event, so a
+      // Ctrl-only wheel that still reaches the page is treated as a trackpad pinch.
       const result = reducePinchZoomWheel(state, event, viewport())
       if (result.preventDefault) {
         event.preventDefault()

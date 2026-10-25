@@ -1,4 +1,6 @@
 import { useCallback, type MutableRefObject } from 'react'
+import { removePinchZoomFromRect } from '../../../../../shared/browser-pinch-zoom'
+import { getBrowserPagePinchZoom } from '../browser-page-pinch-zoom'
 import { deliverMarkupToClipboard } from './markup-clipboard-delivery'
 import {
   useMarkupMode,
@@ -15,7 +17,11 @@ export function useBrowserPageMarkupCapture(
       if (!webview) {
         return null
       }
-      const rect = webview.getBoundingClientRect()
+      // Why: capturePage returns the guest's own unmagnified frame (as DevTools does under pinch zoom), so size it by the unmagnified box.
+      const rect = removePinchZoomFromRect(
+        webview.getBoundingClientRect(),
+        getBrowserPagePinchZoom(webview)
+      )
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }

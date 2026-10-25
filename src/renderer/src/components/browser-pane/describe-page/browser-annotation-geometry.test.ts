@@ -201,3 +201,21 @@ describe('browser annotation card follows the live element', () => {
     expect(released).toEqual({ scrollX: 1, scrollY: 2, viewportWidth: 800, version: 2 })
   })
 })
+
+describe('browser annotation composer placement under pinch zoom', () => {
+  it('anchors at the target as magnified on screen', () => {
+    const pane = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 900 }) }
+    // A 2x magnified guest shifted by (-300, -100) reports its transformed box.
+    const webview = {
+      getBoundingClientRect: () => ({ left: -300, top: -100, width: 1800, height: 1800 })
+    }
+    const anchor = getBrowserOverlayAnchor(
+      payload({ isFixed: true, rectViewport: { x: 200, y: 300, width: 100, height: 20 } }),
+      pane,
+      webview,
+      { scrollX: 0, scrollY: 0, viewportWidth: 900, version: 0 }
+    )
+    // Screen box: left 100, top 500, 200 x 40.
+    expect(anchor).toMatchObject({ x: 200, y: 540 })
+  })
+})

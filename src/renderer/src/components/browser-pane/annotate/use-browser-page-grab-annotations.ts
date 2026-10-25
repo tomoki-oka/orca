@@ -16,6 +16,7 @@ import type {
   BrowserGrabPayload
 } from '../../../../../shared/browser-grab-types'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
+import { getBrowserPagePinchZoom } from '../browser-page-pinch-zoom'
 import {
   createBrowserAnnotationId,
   createBrowserAnnotationPayload,
@@ -127,9 +128,11 @@ export function useBrowserPageGrabAnnotations({
         const webviewRect = webview?.getBoundingClientRect()
         const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
         const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
-        x = offsetX + rect.x + rect.width / 2
-        const elementBottom = offsetY + rect.y + rect.height
-        const elementTop = offsetY + rect.y
+        // Why: a magnified guest draws its element at pinch scale from the (already shifted) webview origin.
+        const { scale } = webview ? getBrowserPagePinchZoom(webview) : { scale: 1 }
+        x = offsetX + (rect.x + rect.width / 2) * scale
+        const elementBottom = offsetY + (rect.y + rect.height) * scale
+        const elementTop = offsetY + rect.y * scale
         const containerHeight = containerRect?.height ?? 0
         below = elementBottom + 52 < containerHeight
         y = below ? elementBottom : elementTop

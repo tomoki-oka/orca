@@ -20,6 +20,8 @@ import {
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
 import { BrowserPageGrabToast } from './browser-page-grab-toast'
 import { PendingBrowserAnnotationCard } from './pending-browser-annotation-card'
+import { getBrowserPagePinchZoom } from '../browser-page-pinch-zoom'
+import { useBrowserPagePinchZoomRerender } from './use-browser-page-pinch-zoom-rerender'
 import type { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from './use-browser-page-grab-annotations'
 
@@ -63,6 +65,10 @@ export function BrowserGuestAnnotateOverlays({
     setGrabToast
   } = grabAnnotations
   const markupTarget = markupPortalContainer ?? containerRef.current
+  useBrowserPagePinchZoomRerender(
+    webviewRef,
+    pendingAnnotationPayload !== null || (grab.state === 'confirming' && grab.contextMenu)
+  )
   const {
     browserAnnotations,
     annotationTraySendOpen,
@@ -156,9 +162,11 @@ export function BrowserGuestAnnotateOverlays({
               const cRect = containerRef.current?.getBoundingClientRect()
               const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
               const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
+              // Why: a magnified guest draws its element at pinch scale from the (already shifted) webview origin.
+              const { scale } = webview ? getBrowserPagePinchZoom(webview) : { scale: 1 }
               return {
-                left: offsetX + rect.x + rect.width / 2,
-                top: offsetY + rect.y + rect.height / 2
+                left: offsetX + (rect.x + rect.width / 2) * scale,
+                top: offsetY + (rect.y + rect.height / 2) * scale
               }
             })()}
           />

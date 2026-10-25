@@ -2,7 +2,9 @@ import {
   BROWSER_PINCH_ZOOM_ENABLE_CHANNEL,
   BROWSER_PINCH_ZOOM_STATE_CHANNEL,
   computeOverlayScrollbar,
+  NO_PINCH_ZOOM,
   parseBrowserPinchZoomPayload,
+  type PinchZoomTransform,
   type BrowserPinchZoomPayload
 } from '../../../../shared/browser-pinch-zoom'
 
@@ -11,6 +13,7 @@ const SCROLLBAR_HIDE_DELAY_MS = 800
 function createOverlayScrollbar(host: HTMLElement, vertical: boolean): HTMLDivElement {
   const bar = host.ownerDocument.createElement('div')
   bar.setAttribute('aria-hidden', 'true')
+  bar.dataset.browserPinchZoomScrollbar = ''
   Object.assign(bar.style, {
     position: 'absolute',
     [vertical ? 'right' : 'bottom']: '2px',
@@ -29,6 +32,27 @@ function createOverlayScrollbar(host: HTMLElement, vertical: boolean): HTMLDivEl
 type PinchZoomController = { setEnabled: (enabled: boolean) => void }
 
 const controllers = new WeakMap<Electron.WebviewTag, PinchZoomController>()
+const appliedTransforms = new WeakMap<Electron.WebviewTag, PinchZoomTransform>()
+const changeListeners = new Set<(webview: Electron.WebviewTag) => void>()
+
+/** The transform currently applied to a webview; host overlays use it to line up with the magnified page. */
+export function getBrowserPagePinchZoom(webview: Electron.WebviewTag): PinchZoomTransform {
+  return appliedTransforms.get(webview) ?? NO_PINCH_ZOOM
+}
+
+export function subscribeBrowserPagePinchZoomChange(
+  listener: (webview: Electron.WebviewTag) => void
+): () => void {
+  changeListeners.add(listener)
+  return () => changeListeners.delete(listener)
+}
+
+function publishTransform(webview: Electron.WebviewTag, transform: PinchZoomTransform): void {
+  appliedTransforms.set(webview, transform)
+  for (const listener of changeListeners) {
+    listener(webview)
+  }
+}
 
 /**
  * Mirrors the guest's pinch-zoom state onto its `<webview>`. `clip` must be the pane-sized box
@@ -41,6 +65,8 @@ export function attachBrowserPagePinchZoom(webview: Electron.WebviewTag, clip: H
   let verticalBar: HTMLDivElement | null = null
   let horizontalBar: HTMLDivElement | null = null
   clip.style.overflow = 'hidden'
+  // Why: a rebuilt webview reuses its clip, and the previous guest's bars would otherwise stay behind.
+  clip.querySelectorAll('[data-browser-pinch-zoom-scrollbar]').forEach((bar) => bar.remove())
 
   const hideBars = (): void => {
     for (const bar of [verticalBar, horizontalBar]) {
@@ -61,6 +87,7 @@ export function attachBrowserPagePinchZoom(webview: Electron.WebviewTag, clip: H
     webview.style.transformOrigin = ''
     webview.style.transform = ''
     hideBars()
+    publishTransform(webview, NO_PINCH_ZOOM)
   }
   const apply = (payload: BrowserPinchZoomPayload): void => {
     if (payload.scale === 1) {
@@ -69,6 +96,11 @@ export function attachBrowserPagePinchZoom(webview: Electron.WebviewTag, clip: H
     }
     webview.style.transformOrigin = '0 0'
     webview.style.transform = `translate(${payload.offsetX}px, ${payload.offsetY}px) scale(${payload.scale})`
+    publishTransform(webview, {
+      scale: payload.scale,
+      offsetX: payload.offsetX,
+      offsetY: payload.offsetY
+    })
     verticalBar ??= createOverlayScrollbar(clip, true)
     horizontalBar ??= createOverlayScrollbar(clip, false)
     const vertical = computeOverlayScrollbar(

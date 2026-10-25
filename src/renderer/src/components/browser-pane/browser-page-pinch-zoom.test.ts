@@ -7,7 +7,9 @@ import {
 } from '../../../../shared/browser-pinch-zoom'
 import {
   attachBrowserPagePinchZoom,
-  setBrowserPagePinchZoomEnabled
+  getBrowserPagePinchZoom,
+  setBrowserPagePinchZoomEnabled,
+  subscribeBrowserPagePinchZoomChange
 } from './browser-page-pinch-zoom'
 
 const MAGNIFIED: BrowserPinchZoomPayload = {
@@ -60,7 +62,7 @@ describe('browser page pinch zoom', () => {
     emit('ipc-message', stateMessage(MAGNIFIED))
     expect(webview.style.transform).toBe('translate(-100px, -50px) scale(2)')
     expect(webview.style.transformOrigin).toBe('0 0')
-    expect(clip.querySelectorAll('[aria-hidden="true"]').length).toBe(2)
+    expect(clip.querySelectorAll('[data-browser-pinch-zoom-scrollbar]').length).toBe(2)
   })
 
   it('ignores invalid payloads and other channels', () => {
@@ -97,5 +99,28 @@ describe('browser page pinch zoom', () => {
     expect(webview.style.transform).toBe('')
     emit('dom-ready')
     expect(send).toHaveBeenLastCalledWith(BROWSER_PINCH_ZOOM_ENABLE_CHANNEL, false)
+  })
+
+  it('exposes the applied transform and notifies subscribers as it changes', () => {
+    const { emit, webview } = setup()
+    const listener = vi.fn()
+    const unsubscribe = subscribeBrowserPagePinchZoomChange(listener)
+    expect(getBrowserPagePinchZoom(webview).scale).toBe(1)
+    emit('ipc-message', stateMessage(MAGNIFIED))
+    expect(getBrowserPagePinchZoom(webview)).toEqual({ scale: 2, offsetX: -100, offsetY: -50 })
+    expect(listener).toHaveBeenLastCalledWith(webview)
+    emit('load-commit', { isMainFrame: true })
+    expect(getBrowserPagePinchZoom(webview).scale).toBe(1)
+    unsubscribe()
+  })
+
+  it('does not leave the previous guest scrollbars behind when its clip is reused', () => {
+    const { clip, emit, webview } = setup()
+    emit('ipc-message', stateMessage(MAGNIFIED))
+    expect(clip.querySelectorAll('[data-browser-pinch-zoom-scrollbar]').length).toBe(2)
+    attachBrowserPagePinchZoom(webview, clip)
+    expect(clip.querySelectorAll('[data-browser-pinch-zoom-scrollbar]').length).toBe(0)
+    emit('ipc-message', stateMessage(MAGNIFIED))
+    expect(clip.querySelectorAll('[data-browser-pinch-zoom-scrollbar]').length).toBe(2)
   })
 })

@@ -28,6 +28,8 @@ import { navigateBrowserPageToUrl } from './navigate-browser-page-url'
 import type { BrowserDownloadState } from './browser-download-progress'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'
 import { useBrowserPageDownloadEvents } from './use-browser-page-download-events'
+import { removePinchZoomFromRect } from '../../../../../shared/browser-pinch-zoom'
+import { getBrowserPagePinchZoom } from '../browser-page-pinch-zoom'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserPageUrlSetter,
@@ -188,7 +190,10 @@ export function useBrowserPageNavigationDownloads({
       }
 
       const webview = webviewRef.current
-      const rect = webview?.getBoundingClientRect()
+      // Why: a magnified webview's rect spills past the pane, so measure the drop against the unmagnified box.
+      const rect = webview
+        ? removePinchZoomFromRect(webview.getBoundingClientRect(), getBrowserPagePinchZoom(webview))
+        : null
       if (!webview || !rect) {
         setResourceNotice(
           translate(

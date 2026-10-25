@@ -79,3 +79,35 @@ export function computeOverlayScrollbar(
   const ratio = Math.min(1, Math.max(0, (scroll * scale - translate) / (total - visible)))
   return { length, offset: (visible - length) * ratio }
 }
+
+export type PinchZoomTransform = { scale: number; offsetX: number; offsetY: number }
+export type PinchZoomRect = { left: number; top: number; width: number; height: number }
+
+export const NO_PINCH_ZOOM: PinchZoomTransform = { scale: 1, offsetX: 0, offsetY: 0 }
+
+/** Where a point in the guest's layout viewport appears on screen, relative to the unmagnified pane's top-left. */
+export function guestPointToPane(
+  point: { x: number; y: number },
+  transform: PinchZoomTransform
+): { x: number; y: number } {
+  return {
+    x: point.x * transform.scale + transform.offsetX,
+    y: point.y * transform.scale + transform.offsetY
+  }
+}
+
+/**
+ * A magnified webview reports its transformed box from getBoundingClientRect; this recovers the
+ * unmagnified pane box, which is what guest layout coordinates are measured against.
+ */
+export function removePinchZoomFromRect(
+  rect: PinchZoomRect,
+  transform: PinchZoomTransform
+): PinchZoomRect {
+  return {
+    left: rect.left - transform.offsetX,
+    top: rect.top - transform.offsetY,
+    width: rect.width / transform.scale,
+    height: rect.height / transform.scale
+  }
+}

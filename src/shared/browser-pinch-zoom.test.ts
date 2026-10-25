@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeOverlayScrollbar,
+  guestPointToPane,
+  NO_PINCH_ZOOM,
+  removePinchZoomFromRect,
   parseBrowserPinchZoomPayload,
   type BrowserPinchZoomPayload
 } from './browser-pinch-zoom'
@@ -61,5 +64,24 @@ describe('computeOverlayScrollbar', () => {
 
   it('returns null when nothing is left to scroll', () => {
     expect(computeOverlayScrollbar(400, 2, 800, 0, 0)).toBeNull()
+  })
+})
+
+describe('pinch zoom coordinate transforms', () => {
+  const transform = { scale: 2, offsetX: -100, offsetY: -50 }
+
+  it('maps a guest point to its magnified position', () => {
+    expect(guestPointToPane({ x: 30, y: 40 }, transform)).toEqual({ x: -40, y: 30 })
+  })
+
+  it('leaves points alone without magnification', () => {
+    expect(guestPointToPane({ x: 30, y: 40 }, NO_PINCH_ZOOM)).toEqual({ x: 30, y: 40 })
+  })
+
+  it('recovers the unmagnified pane box from the transformed one', () => {
+    // Pane at (10, 20), 500 x 400: magnified it reports left 10-100, top 20-50, 1000 x 800.
+    expect(
+      removePinchZoomFromRect({ left: -90, top: -30, width: 1000, height: 800 }, transform)
+    ).toEqual({ left: 10, top: 20, width: 500, height: 400 })
   })
 })
